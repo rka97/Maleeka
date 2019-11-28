@@ -1,7 +1,5 @@
 import numpy as np
-import cv2 as cv
 import matplotlib.pyplot as plt
-import os
 import deskew
 from skimage import io
 from skimage.transform import rotate
