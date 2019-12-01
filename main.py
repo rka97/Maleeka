@@ -6,6 +6,7 @@ from skimage.transform import rotate
 from skimage.color import rgb2gray
 # from skimage.filters import threshold_otsu,threshold_minimum, gaussian
 from skimage.filters import *
+from scipy.stats import mode
 
 THRESH = 0.001
 
@@ -15,6 +16,9 @@ def main():
     image = preprocess(image)
     io.imsave('output.png', image)
     image_lines = segment_lines(image)
+    image_words = segment_words(image_lines)
+    image_characters = segment_characters_latifa(image_words)
+    ## Now need to segment words into characters.
 
 def show_image(images):
     for img in images:
@@ -41,7 +45,6 @@ def segment_lines(img):
     horizontal_projection = 1 * (horizontal_projection > threshold)
     lines = []
     lin_start = 0
-    lin_end = -1
     reading_line = 0
     for i in range(horizontal_projection.size):
         line_value = horizontal_projection[i]
@@ -49,10 +52,77 @@ def segment_lines(img):
             lin_start = i
             reading_line = 1
         elif reading_line == 1 and line_value <= 0:
-            lin_end = i
-            lines.append( img[lin_start:lin_end, :] )
+            lines.append( img[lin_start:i, :] )
             reading_line = 0
-    show_image(lines)
+    return lines
+
+## TODO: merge this with the line segmentation algorithm.
+##       or take the common parts into one function.
+def segment_words(lines):
+    words = []
+    for line in lines:
+        vertical_projection = np.sum(line, axis=0)
+        vertical_projection = gaussian(vertical_projection, sigma=1.5)
+        threshold = np.max(vertical_projection) * 0.1
+        vertical_projection = 1 * (vertical_projection > threshold)
+        word_start = 0
+        reading_word = 0
+        i = vertical_projection.size - 1
+        while i >= 0:
+            line_value = vertical_projection[i]
+            if reading_word == 0 and line_value > 0:
+                word_start = i
+                reading_word = 1
+            elif reading_word == 1 and line_value <= 0:
+                word = line[:, i+1:word_start+1]
+                words.append( word )
+                reading_word = 0
+                # show_image([word])
+            i -= 1
+    return words
+
+
+# Implementation of the character segmentation algorithm from Latifa et al. (2004)
+# The results were not very good.
+def segment_characters_latifa(words):
+    for word in words:
+        # Find the horizontal junction line.
+        horizontal_projection = np.sum(word, axis=1)
+        junction_idx = np.argmax(horizontal_projection)
+        # Find the top & bottom lines for each column.
+        length, width = word.shape
+        top_lines = np.argmax(word, axis=0)
+        bottom_lines = length - 1 - np.argmax( np.flip(word, axis=0), axis=0)
+        # Find the threshold.
+        vertical_projection = np.sum(word, axis=0)
+        threshold = mode(vertical_projection)[0][0]
+        # Find the number of transitions in every column.
+        num_transitions = np.sum(np.abs(word[0:length-2, :] - word[1:length-1, :]), axis=0)
+        
+        character_start = 0
+        reading_characer = 0
+        j = width - 1
+        show_image([word])
+        while j >= 0:
+            column_vproj = vertical_projection[j]
+            print(column_vproj, threshold)
+            if reading_characer == 0 and column_vproj > threshold:
+                character_start = j
+                reading_characer = 1
+                print("Started a character!")
+            elif reading_characer == 1:
+                if (top_lines[j] <= junction_idx) and \
+                    (bottom_lines[j] >= junction_idx) and \
+                    (column_vproj <= threshold) and \
+                    (num_transitions[j] == 2) and \
+                    (bottom_lines[j] - top_lines[j] <= threshold) and \
+                    (top_lines[j] >= top_lines[character_start]):
+                        show_image([word[:, j:character_start+2]])
+                        reading_characer = 0
+                        print("ended a chracter!")
+                elif j == 0:
+                    show_image([word[:, j:character_start+2]])
+            j -= 1
 
 
 
