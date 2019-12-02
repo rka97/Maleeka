@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import deskew
 from skimage import io
-from skimage.transform import rotate
+from skimage.transform import rotate, resize, rescale
 from skimage.color import rgb2gray
 # from skimage.filters import threshold_otsu,threshold_minimum, gaussian
 from skimage.filters import *
@@ -52,7 +52,10 @@ def segment_lines(img):
             lin_start = i
             reading_line = 1
         elif reading_line == 1 and line_value <= 0:
-            lines.append( img[lin_start:i, :] )
+            line = img[lin_start:i, :]
+            resized_line = resize(line, (40, int(line.shape[1] * (40 / line.shape[0]))), preserve_range=True, order=3, anti_aliasing=False)
+            resized_line = (resized_line > 0.8 * np.mean(resized_line)) * 1
+            lines.append( resized_line )
             reading_line = 0
     return lines
 
@@ -105,7 +108,7 @@ def segment_characters_latifa(words):
         show_image([word])
         while j >= 0:
             column_vproj = vertical_projection[j]
-            print(column_vproj, threshold)
+            # print(column_vproj, threshold)
             if reading_characer == 0 and column_vproj > threshold:
                 character_start = j
                 reading_characer = 1
