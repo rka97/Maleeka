@@ -22,7 +22,7 @@ What remains:
 ## Segmentation
 According to Yasser M. Alginahi's A survey on Arabic character segmentation, techniques for segmenting Arabic words into characters generally fall into the following categories:
 1. Histogram-based Methods
-Old, but seems to be very good for fixed fonts without overlapping characters (the font we have has some of those). TODO.
+Old, but seems to be very good for fixed fonts without overlapping characters (the font we have has some of those). TRIED. DOESN'T WORK WELL.
 2. Contour Tracing
 Also old, but seem good. TODO.
 3. Thinning

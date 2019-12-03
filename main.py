@@ -6,6 +6,7 @@ from skimage.transform import rotate, resize, rescale
 from skimage.color import rgb2gray
 # from skimage.filters import threshold_otsu,threshold_minimum, gaussian
 from skimage.filters import *
+from skimage.morphology import *
 from scipy.stats import mode
 
 THRESH = 0.001
@@ -14,7 +15,7 @@ def main():
     img_pos = "images/capr6.png"
     image = io.imread(img_pos)
     image = preprocess(image)
-    io.imsave('output.png', image)
+    io.imsave('output.png', image * 255)
     image_lines = segment_lines(image)
     image_words = segment_words(image_lines)
     image_characters = segment_characters_latifa(image_words)
@@ -32,8 +33,11 @@ def preprocess(img):
     grayscale = rgb2gray(img)
     angle = deskew.determine_skew(grayscale)
     grayscale_rotated = rotate(grayscale, angle, resize=True, mode='constant', cval=1) * 255 
-    threshold = threshold_otsu(grayscale_rotated)
-    thresholded_image = 1 * (grayscale_rotated < threshold)
+    # threshold = threshold_otsu(grayscale_rotated)
+    # thresholded_image = 1 * (grayscale_rotated < threshold)
+    thresholded_image = 255 - grayscale_rotated
+    # thresholded_image = thin(thresholded_image)
+    show_image([thresholded_image])
     return thresholded_image
 
 
@@ -54,8 +58,12 @@ def segment_lines(img):
         elif reading_line == 1 and line_value <= 0:
             line = img[lin_start:i, :]
             resized_line = resize(line, (40, int(line.shape[1] * (40 / line.shape[0]))), preserve_range=True, order=3, anti_aliasing=False)
-            resized_line = (resized_line > 0.8 * np.mean(resized_line)) * 1
+            threshold = threshold_otsu(resized_line)
+            resized_line = (resized_line > threshold) * 1
+            io.imsave('images/lines/line' + str(len(lines)) +'.png', resized_line * 255)
+            # resized_line = (resized_line > 1.5 * np.mean(resized_line)) * 1
             lines.append( resized_line )
+            # show_image([resized_line])
             reading_line = 0
     return lines
 
