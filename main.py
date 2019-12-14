@@ -273,7 +273,6 @@ def is_baseline(word, start, end, baseline):
 
 # check if the segment has a hole
 def has_hole(word, sr1, sr2, cut_idx):
-    #show_image([line])
     _, contours, heirarchy = cv.findContours(word[:,sr1:sr2].copy().astype('uint8')*255, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
     if (len(contours) == 0):
         return False
@@ -311,6 +310,18 @@ def get_height_no_dots(segment, baseline):
             start = i
     return start, end
 
+def get_stroke(segment):
+    start = 0
+    end = 0
+    flag = 0
+    for i in range(segment.shape[0]):
+        if np.count_nonzero(segment[i,:] == 1) != 0:
+            if (flag == 0):
+                start = i
+                flag = 1
+            else:
+                end = i
+    return segment[start:end,:]
 # check if thesegment is a stroke, still haven't figured out what stroke means
 def is_stroke(word_no_dots, sr, baseline, mfv, prev_sr):
     '''
@@ -321,11 +332,14 @@ def is_stroke(word_no_dots, sr, baseline, mfv, prev_sr):
     (iv) the mode value of the horizontal projection is equal to MFV value, and
     (v) the segment has no Holes. 
     '''
-    segment = word_no_dots[:,sr[0]:prev_sr[0]].copy()
+    segment = get_stroke(word_no_dots[:,sr[0]:prev_sr[0]].copy())
+    if (segment.shape[0] == 0):
+        return False
     above_baseline_hp = np.sum(np.sum(segment[0:baseline,:], axis=1))
     below_baseline_hp = np.sum(np.sum(segment[baseline:-1,:], axis=1))
     horizontal_projection = np.sum(segment, axis=1)
-    horizontal_mode = mode(horizontal_projection)[0][0]
+    hpmode = mode(horizontal_projection)
+    horizontal_mode = hpmode[0][0]
     segment_height = get_height(segment)
     no_of_componenets, _ = cv.connectedComponents(np.uint8(segment),connectivity=8)
     sort_hp = sorted(horizontal_projection)
@@ -377,7 +391,6 @@ def separation_region_filteration(words, separation_regions, word_index, max_tra
         #     pass
         vp = np.sum(word, axis=0)
         mfv = mode(vp)[0][0]
-        srs = separation_regions[prev_index:int(word_index[i])]
         horizontal_projection = np.sum(word, axis=1)
         baseline = np.argmax(horizontal_projection)
         line_height = get_height(word)
@@ -387,9 +400,9 @@ def separation_region_filteration(words, separation_regions, word_index, max_tra
         j = len(srs)
         while j > 0:
             j -= 1
-            show_image([word])
+            #show_image([word])
             segment = word[:,srs[j][0]:prev_sr[0]]
-            show_image([segment])
+            #show_image([segment])
             if vp[srs[j][0]] == 0:
                 valid_separation_regions.append(srs[j])
                 prev_sr = srs[j]
@@ -404,8 +417,6 @@ def separation_region_filteration(words, separation_regions, word_index, max_tra
                     continue
             if not has_path(word, (baseline, srs[j][1]), (baseline, srs[j][3])):
             #if not is_baseline(word, srs[j][1], srs[j][3], baseline):
-                #show_image([word[0:baseline,srs[j][3]:srs[j][1]]])
-                #show_image([word[baseline:-1,srs[j][3]:srs[j][1]]])
                 above_baseline_hp = np.sum(np.sum(word[0:baseline,srs[j][3]:srs[j][1]], axis=1))
                 below_baseline_hp = np.sum(np.sum(word[baseline:-1,srs[j][3]:srs[j][1]], axis=1))
                 if below_baseline_hp > above_baseline_hp:
@@ -426,35 +437,41 @@ def separation_region_filteration(words, separation_regions, word_index, max_tra
                     if (get_height(word[:,srs[j][0]:prev_sr[0]]) < (line_height) / 2):
                         prev_sr = srs[j]
                         continue
-            if (is_stroke(word_no_dots, srs[j], baseline, mfv, prev_sr) == False)and (j-1 >= 0):
-                if not has_path(word, (baseline, srs[j-1][1]), (baseline, srs[j-1][3])):
-                #if not is_baseline(word, srs[j-1][1], srs[j-1][3], baseline) and vp[srs[j-1][0]] <= mfv:
+            if (is_stroke(word_no_dots, srs[j], baseline, mfv, prev_sr) == False):
+                if (j-1 >= 0):
+                    if not has_path(word, (baseline, srs[j-1][1]), (baseline, srs[j-1][3])) and vp[srs[j-1][0]] <= mfv:
+                    #if not is_baseline(word, srs[j-1][1], srs[j-1][3], baseline) and vp[srs[j-1][0]] <= mfv:
                         prev_sr = srs[j]
                         continue
-                else:
-                    valid_separation_regions.append(srs[j])
-                    prev_sr = srs[j]
-                    continue
+                    else:
+                        valid_separation_regions.append(srs[j])
+                        prev_sr = srs[j]
+                        continue
 
             if(is_stroke(word_no_dots, srs[j], baseline, mfv, prev_sr) == True and has_dots(segment, baseline) == True):
                 valid_separation_regions.append(srs[j]) 
                 prev_sr = srs[j]
                 continue
             if j-1 >= 0:
-                if (is_stroke(word_no_dots, prev_sr , baseline, mfv, srs[j-1]) == True):
-                    if has_dots(word[:,srs[j-1][0]:srs[j][0]], baseline) == False:
-                        valid_separation_regions.append(srs[j])
-                        j -= 2
-                        if j >= 0:
+                if is_stroke(word_no_dots, srs[j], baseline, mfv, prev_sr) == True and has_dots(segment, baseline) == False:
+                    if j-2 >= 0:
+                        if (is_stroke(word_no_dots, srs[j-1] , baseline, mfv, srs[j-2]) == True) and has_dots(word[:,srs[j-2][0]:srs[j-1][0]], baseline) == False:
+                            valid_separation_regions.append(srs[j])
+                            j -= 2
+                            if j >= 0:
+                                prev_sr = srs[j]
+                            continue
+                    if j-3 >= 0:
+                        if (is_stroke(word_no_dots, srs[j-1] , baseline, mfv, srs[j-2]) == True) and has_dots(word[:,srs[j-2][0]:srs[j-1][0]], baseline) == True and (is_stroke(word_no_dots, srs[j-2] , baseline, mfv, srs[j-3]) == True) and has_dots(word[:,srs[j-3][0]:srs[j-2][0]], baseline) == False:
+                            valid_separation_regions.append(srs[j])
+                            j -= 2
+                            if j >= 0:
+                                prev_sr = srs[j]
+                            continue
+                    if j-2 >= 0:
+                        if (is_stroke(word_no_dots, srs[j-1] , baseline, mfv, srs[j-2]) == False) or ((is_stroke(word_no_dots, srs[j-1] , baseline, mfv, srs[j-2]) == True) and has_dots(word[:,srs[j-2][0]:srs[j-1][0]], baseline) == True):
                             prev_sr = srs[j]
-                        continue
-            if j-2 >= 0:
-                if (is_stroke(word_no_dots, srs[j], baseline, mfv, srs[j-1]) == True and has_dots(word[:,srs[j-1][0]:srs[j][0]], baseline) == True) and (is_stroke(word_no_dots, srs[j-1], baseline, mfv, srs[j-2]) == True and has_dots(word[:,srs[j-2][0]:srs[j-1][0]], baseline) == False):
-                    valid_separation_regions.append(srs[j])
-                    j -= 2
-                    if j >= 0:
-                        prev_sr = srs[j]
-                    continue
+                            continue
         separation_indices[i] = len(valid_separation_regions)
         i += 1
         prev_index = int(word_index[i-1])
