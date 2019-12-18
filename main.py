@@ -5,7 +5,7 @@ from scipy.stats import mode
 from skimage import io
 from skimage.color import rgb2gray
 from skimage.filters import gaussian, threshold_otsu
-from skimage.morphology import skeletonize, thin
+from skimage.morphology import skeletonize, thin, binary_opening
 from skimage.transform import rescale, resize, rotate
 from skimage.graph import route_through_array
 import time
@@ -83,6 +83,8 @@ def segment_words(lines):
         vertical_projection = np.reshape(vertical_projection, (vertical_projection.shape[0], 1))
         vertical_projection = gaussian(vertical_projection, sigma=1.0)
         threshold = np.max(vertical_projection) * 0.02
+        # vertical_projection = gaussian(vertical_projection, sigma=1.5)	
+        # threshold = np.max(vertical_projection) * 0.1
         vertical_projection = 1 * (vertical_projection > threshold)
         word_start = 0
         reading_word = 0
@@ -216,6 +218,7 @@ def get_cut_points(words, max_transitions):
     index = 0
     for word in words:
         #line= thin(line)
+        #word= binary_opening(word)
         vp = np.sum(word, axis=0)
         # try opening (erosion) here if results are unsatisfactory  ==> tried it.. baaad results, try opening
         # without skeletonizing next
@@ -253,7 +256,7 @@ def get_cut_points(words, max_transitions):
                             mid_arr.append(k)
                     if (len(smaller_arr) != 0):
                         cut_index = find_nearest_index(smaller_arr, mid_index)
-                    if (len(mid_arr) != 0):
+                    elif (len(mid_arr) != 0):
                         cut_index = find_nearest_index(mid_arr, mid_index)
                     else:
                         cut_index = mid_index
@@ -310,6 +313,7 @@ def get_height_no_dots(segment, baseline):
             start = i
     return start, end
 
+# prep for stroke checking 
 def get_stroke(segment):
     start = 0
     end = 0
@@ -322,6 +326,7 @@ def get_stroke(segment):
             else:
                 end = i
     return segment[start:end,:]
+
 # check if thesegment is a stroke, still haven't figured out what stroke means
 def is_stroke(word_no_dots, sr, baseline, mfv, prev_sr):
     '''
@@ -350,6 +355,7 @@ def is_stroke(word_no_dots, sr, baseline, mfv, prev_sr):
         return True
     return False
 
+# find if the segment has dots
 def has_dots(segment, baseline):
     above_baseline = segment[0:baseline,:]
     below_baseline = segment[baseline:-1,:]
@@ -359,6 +365,7 @@ def has_dots(segment, baseline):
         return True
     return False
 
+# get the height of a segment
 def get_height(segment):
     start = 0
     end = 0
@@ -372,6 +379,7 @@ def get_height(segment):
                 end = i
     return end - start
 
+# find of a path exists between 2 pixels
 def has_path(img, start, end):
     search_array = (img == 0) * 1.0
     base_value = search_array[start[0], start[1]] + search_array[end[0], end[1]]
@@ -379,7 +387,15 @@ def has_path(img, start, end):
     _, cost = route_through_array( search_array, start=(start[0], start[1]), end=(end[0], end[1]), fully_connected=True, geometric= False)
     return cost == base_value
 
+# check if a segment is empty	
+def empty_segment(segment):	
+    pixels_count = np.count_nonzero(segment == 0)	
+    print("count = ", pixels_count)	
+    if (pixels_count <= 108):	
+        return True	
+    return False	
 
+# filtration of candidate cut indices
 def separation_region_filteration(words, separation_regions, word_index, max_transitions):
     i = 0
     prev_index = 0
@@ -477,6 +493,7 @@ def separation_region_filteration(words, separation_regions, word_index, max_tra
         prev_index = int(word_index[i-1])
     return valid_separation_regions, separation_indices
 
+# show image of max transitions
 def show_max_transitions(words, max_transitions):
     i = 0
     for word in words:
@@ -484,6 +501,7 @@ def show_max_transitions(words, max_transitions):
         show_image([word])
         i += 1
 
+# show images of cut points
 def show_cut_points(words, separation_regions, word_index, max_transitions):
     i = 0
     prev_index = 0
@@ -501,6 +519,7 @@ def show_cut_points(words, separation_regions, word_index, max_transitions):
         show_image([word])
         prev_index = int(word_index[i-1])
 
+# show images after filteration
 def show_segments(words, valid_separation_regions, separation_indices):
     i = 0
     prev_index = 0
@@ -515,13 +534,15 @@ def show_segments(words, valid_separation_regions, separation_indices):
             w[15:20, sr[3]] = 1
             print("cut = "+ str(sr[0])+ "   start = "+ str(sr[1])+"   mid = "+ str(sr[2])+"    end = "+ str(sr[3]))
             segment = word[:,sr[0]: prev_sr]
-            show_image([segment])
+            if (not empty_segment(segment)):
+                show_image([segment])
             prev_sr = sr[0]
         if (len(srs) == 0):
             segment = word
         else:
             segment = word[:,:srs[-1][0]]
-        show_image([segment])
+        if (not empty_segment(segment)):
+             show_image([segment])
         show_image([w])
         i += 1
         prev_index = int(separation_indices[i-1])
