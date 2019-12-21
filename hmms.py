@@ -1,118 +1,133 @@
 from pomegranate import *
 import numpy as np
 from pom_helpers import *
-
-CODEBOOK_VECTORS = 64
+from util import *
+import pickle
 
 def get_uni_distribution():
     dictionary = {}
-    for i in range(CODEBOOK_VECTORS):
-        dictionary[str(i)] = 1.0/CODEBOOK_VECTORS
+    for i in range(NUM_CLUSTERS):
+        dictionary[i] = 1.0/NUM_CLUSTERS
     return DiscreteDistribution(dictionary)
 
-def one_character_model(num_states, char_name):
+
+def one_character_model(num_states, char_name, char_data):
     char = str(char_name)
 
+    start = State(None, name=char_name + "_start")
+    end = State(None, name=char_name + "_end")
+
+    model = HiddenMarkovModel(char_name, start=start, end=end)
+
     states = []
-    initial_state = State(None, name="init")
-    # states.append(initial_state)
-    for i in range(num_states - 2):
-        states.append(State(DiscreteDistribution({"0": 1}), name="s"+str(i)))
-    final_state = State(DiscreteDistribution({char: 1}) , name="end")
-    # states.append(final_state)
-    model = HiddenMarkovModel(name="CharModel", start=initial_state, end=final_state)
-
+    for i in range(num_states):
+        state = State(get_uni_distribution(), name=char_name + "_s" + str(i))
+        states.append(state)
     model.add_states(states)
-    model.add_transition(model.start, states[0], 1.0/2.0)
-    model.add_transition(model.start, model.end, 1.0/2.0)
 
-    nonterm_states = num_states - 2
+    model.add_transition(start, states[0], 1)
 
-    model.add_transition(states[0], states[1], 1.0/2.0)
-    model.add_transition(states[0], model.start, 1.0/2.0)
+    for i in np.arange(start=0, stop=num_states-1, step=1):
+        model.add_transition(states[i], states[i], 0.5)
+        model.add_transition(states[i], states[i+1], 0.5)
 
-    for i in np.arange(start=1, stop=(nonterm_states-1), step=1):
-        model.add_transition(states[i], states[i+1], 1.0/2.0)
-        model.add_transition(states[i], states[i], 1.0/2.0)
+    model.add_transition(states[num_states - 1], states[num_states - 1], 0.5)
+    model.add_transition(states[num_states - 1], end, 0.5)
+
+    model.bake(merge="None")
+
+    model.fit(sequences=char_data)
+    # print(model.states)
+    return model, states, start, end
+
+
+def add_transitions(model, end_state, other_models):
+    pr_visit = 1.0 / len(other_models)
+    for [_, other_start, _] in other_models:
+        model.add_transition(end_state, other_start, pr_visit)
+
+
+def get_big_model(character_models):
+    form_characters = {
+        "Beginning": [],
+        "End": [],
+        "Isolated": [],
+        "Middle": []
+    }
     
-    model.add_transition(states[nonterm_states-1], model.end, 1.0/2.0)
-    model.add_transition(states[nonterm_states-1], states[nonterm_states-2], 1.0/2.0)
+    great_model = HiddenMarkovModel("GreatRecognizer")
+    
+    for char_name, [model, _, start, end] in character_models.items():
+        name, form = char_name.split('_')
+        form_characters[form].append( [model, start, end] )
+        great_model.add_model(model)
+    
+    for [model, start, end] in form_characters["Beginning"]:
+        add_transitions(great_model, end, form_characters["End"])
+        add_transitions(great_model, end, form_characters["Middle"])
+    
+    for [model, start, end] in form_characters["Isolated"]:
+        add_transitions(great_model, end, form_characters["Beginning"])
+        add_transitions(great_model, end, form_characters["Isolated"])
 
-    model.bake()
-    return model
+    for [model, start, end] in form_characters["Middle"]:
+        add_transitions(great_model, end, form_characters["End"])
+        add_transitions(great_model, end, form_characters["Middle"])
 
-# get_uni_distribution()
-model = one_character_model(6, "a")
-# model = HiddenMarkovModel( "Global Alignment")
+    for [model, start, end] in form_characters["End"]:
+        add_transitions(great_model, end, form_characters["Beginning"])
+        add_transitions(great_model, end, form_characters["Isolated"])
 
-# # Define the distribution for insertions
-# i_d = DiscreteDistribution( { 'A': 0.25, 'C': 0.25, 'G': 0.25, 'T': 0.25 } )
+    great_model.bake(merge="None")
+    show_model(great_model, figsize=(5, 5), filename="example.png", overwrite=True, show_ends=False)
 
-# # Create the insert states
-# i0 = State( i_d, name="I0" )
-# i1 = State( i_d, name="I1" )
-# i2 = State( i_d, name="I2" )
-# i3 = State( i_d, name="I3" )
+    
+    print("Here!")
+        
 
-# # Create the match states
-# m1 = State( DiscreteDistribution({ "A": 0.95, 'C': 0.01, 'G': 0.01, 'T': 0.02 }) , name="M1" )
-# m2 = State( DiscreteDistribution({ "A": 0.003, 'C': 0.99, 'G': 0.003, 'T': 0.004 }) , name="M2" )
-# m3 = State( DiscreteDistribution({ "A": 0.01, 'C': 0.01, 'G': 0.01, 'T': 0.97 }) , name="M3" )
+def get_total_model():
+    a_model, a_states, a_start, a_end = one_character_model(6, "a")
+    b_model, b_states, b_start, b_end = one_character_model(6, "b")
 
-# # Create the delete states
-# d1 = State( None, name="D1" )
-# d2 = State( None, name="D2" )
-# d3 = State( None, name="D3" )
+    total_model = HiddenMarkovModel("total")
+    total_model.add_model(a_model)
+    total_model.add_model(b_model)
+    # total_model.add_states([a_start, a_end, b_start, b_end])
 
-# # Add all the states to the model
-# model.add_states( [i0, i1, i2, i3, m1, m2, m3, d1, d2, d3 ] )
+    total_model.add_transition(b_end, b_start, 0.5)
+    total_model.add_transition(b_end, a_start, 0.5)
+    total_model.add_transition(a_end, b_start, 0.5)
+    total_model.add_transition(a_end, a_start, 0.5)
+    # total_model
+    # total_model.add_transition(a_end, b_states[0], 0.3)
+    # total_model.add_transition(a_end, b_start, 1.0)
+    # total_model.add_transition(a_model.end, a_model.start, 0.5)
+    # total_model.add_tusransition(b_model.end, a_model.start, 0.5)
+    # total_model.add_transition(b_model.end, b_model.start, 0.5)
 
-# # Create transitions from match states
-# model.add_transition( model.start, model.start, 0.9 )
-# model.add_transition( model.start, i0, 0.1 )
-# model.add_transition( m1, m2, 0.9 )
-# model.add_transition( m1, i1, 0.05 )
-# model.add_transition( m1, d2, 0.05 )
-# model.add_transition( m2, m3, 0.9 )
-# model.add_transition( m2, i2, 0.05 )
-# model.add_transition( m2, d3, 0.05 )
-# model.add_transition( m3, model.end, 0.9 )
-# model.add_transition( m3, i3, 0.1 )
+    total_model.bake(merge="None")
+    print(total_model.states)
 
-# # Create transitions from insert states
-# model.add_transition( i0, i0, 0.70 )
-# model.add_transition( i0, d1, 0.15 )
-# model.add_transition( i0, m1, 0.15 )
-
-# model.add_transition( i1, i1, 0.70 )
-# model.add_transition( i1, d2, 0.15 )
-# model.add_transition( i1, m2, 0.15 )
-
-# model.add_transition( i2, i2, 0.70 )
-# model.add_transition( i2, d3, 0.15 )
-# model.add_transition( i2, m3, 0.15 )
-
-# model.add_transition( i3, i3, 0.85 )
-# model.add_transition( i3, model.end, 0.15 )
-
-# # Create transitions from delete states
-# model.add_transition( d1, d2, 0.15 )
-# model.add_transition( d1, i1, 0.15 )
-# model.add_transition( d1, m2, 0.70 ) 
-
-# model.add_transition( d2, d3, 0.15 )
-# model.add_transition( d2, i2, 0.15 )
-# model.add_transition( d2, m3, 0.70 )
-
-# model.add_transition( d3, i3, 0.30 )
-# model.add_transition( d3, model.end, 0.70 )
-
-# # Call bake to finalize the structure of the model.
-# model.bake(verbose=True)
-
-# # plt.figure( figsize=(20, 16) )
-# # model.plot()
+    show_model(total_model, figsize=(5, 5), filename="example.png", overwrite=True, show_ends=False)
 
 
-show_model(model, figsize=(5, 5), filename="example.png", overwrite=True, show_ends=False)
-
+def train_character_models(letters):
+    try:
+        with open(LETTER_MODELS_PATH, "rb") as file_handle:
+            characters_models = pickle.load(file_handle)
+            return characters_models
+    except:
+        print("Letter samples don't exist, creating them...")
+    characters_models = {}
+    for letter_name, letter_data in letters.items():
+        forms = letter_data["Forms"]
+        for form in forms:
+            character_name = letter_name + "_" + form
+            print("Making HMM for " + character_name)
+            character_data = letters[letter_name][form]
+            print(len(character_data))
+            character_stuff = one_character_model(STATES_PER_CHARACTER, letter_name + "_" + form, character_data)
+            characters_models[character_name] = character_stuff
+    with open(LETTER_MODELS_PATH, "ab+") as file_handle:
+        pickle.dump(characters_models, file_handle)
+    return characters_models

@@ -1,6 +1,13 @@
 
 import matplotlib.pyplot as plt
 
+CB_DATASET_PATH = "dataset/dataset.data"
+CB_CODEBOOK_PATH = "dataset/codebook.data"
+CHARACTERS_PATH = "images/LettersDataset/"
+LETTERS_PATH = "dataset/letters.data"
+NUM_CLUSTERS = 1024
+STATES_PER_CHARACTER = 3
+LETTER_MODELS_PATH = "dataset/letter_models.data"
 
 def show_image(images):
     for img in images:
@@ -9,7 +16,7 @@ def show_image(images):
         plt.show()
 
 
-letters = {
+init_letters = {
     "1575": {
         "Forms": ["End", "Isolated"],
         "Letter": "ا"
@@ -122,16 +129,12 @@ letters = {
         "Forms": ["End", "Isolated"],
         "Letter": "و"
     },
-    "1609": {
-        "Forms": ["End", "Isolated"],
-        "Letter": "ى"
-    },
     "1610": {
         "Forms": ["Beginning", "End", "Isolated", "Middle"],
         "Letter": "ي"
     },
     "65275": {
-        "Forms": ["Beginning", "End", "Isolated", "Middle"],
+        "Forms": ["Isolated"],
         "Letter": "لا"
     }
 }

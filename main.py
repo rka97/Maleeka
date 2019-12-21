@@ -10,6 +10,7 @@ from skimage.morphology import *
 from scipy.stats import mode
 from seg_free import *
 from segmentation import *
+from hmms import *
 
 THRESH = 0.001
 LINE_HEIGHT = 60
@@ -21,8 +22,13 @@ def main():
     for i in np.arange(start=1, stop=11, step=1):
         file_names.append("images/scanned/csep" + str(i) + ".png")
     kmeans = train_codebook(file_names)
-    print(kmeans.cluster_centers_)
-    train_character_models(kmeans)
+    # print(kmeans.cluster_centers_)
+    letters_data = load_character_data_samples(kmeans)
+    character_models = train_character_models(letters_data)
+    big_model = get_big_model(character_models)
+
+
+    # train_character_models(kmeans)
     # train_character_model(["images/characters/1575/End/NotoSansArabicUI-ExtraCondensedBlack.png"])
     # print(train_character_models())
     # train_character_models()

@@ -7,11 +7,6 @@ from sklearn.cluster import MiniBatchKMeans, KMeans
 import pickle
 import os
 
-CB_DATASET_PATH = "dataset/dataset.data"
-CB_CODEBOOK_PATH = "dataset/codebook.data"
-CHARACTERS_PATH = "images/LettersDataset/"
-NUM_CLUSTERS = 1024
-
 # Credits to https://stackoverflow.com/questions/1066758/find-length-of-sequences-of-identical-values-in-a-numpy-array-run-length-encodi/32681075#32681075
 def encode_column(column, num_transitions=7):
     col_arr = np.asarray(column)
@@ -59,22 +54,47 @@ def train_codebook(file_names):
         image = preprocess(image)
         image_lines = segment_lines(image)
         file_features = khorshed_rle(image_lines, [])
+        print(file_features)
         kmeans.partial_fit(file_features)
     with open(CB_CODEBOOK_PATH, "ab+") as file_handle:
         pickle.dump(kmeans, file_handle)
     return kmeans
 
 
-def train_character_model(X):
-    model = HiddenMarkovModel()
-    
+def get_features_from_image(file_name, character_mode=True):
+    image = io.imread(file_name)
+    image = preprocess(image, not(character_mode))
+    image_lines = segment_lines(image, character_mode)
+    file_features = khorshed_rle(image_lines, [])
+    return file_features
 
-def train_character_models(kmeans):
+
+def load_character_data_samples(kmeans: KMeans):
+    try:
+        with open(LETTERS_PATH, "rb") as file_handle:
+            letters = pickle.load(file_handle)
+            return letters
+    except:
+        print("Letter samples don't exist, creating them...")
+    letters = init_letters.copy()
     for letter_name, letter_data in letters.items():
         print("Processing " + letter_name + " " + letter_data["Letter"])
         forms = letter_data["Forms"]
         for form in forms:
+            j = 0
             character_dir = CHARACTERS_PATH + letter_name + "/" + form
             files = os.listdir(character_dir)
+            character_data = []
             for file in files:
-                print(file)
+                file_name = character_dir + "/" + file
+                if j == 0:
+                    j += 1
+                file_features = np.array(get_features_from_image(file_name))
+                predictions = kmeans.predict(file_features)
+                character_data.append(predictions)
+            letters[letter_name][form] = character_data
+    with open(LETTERS_PATH, "ab+") as file_handle:
+        pickle.dump(letters, file_handle)
+    return letters
+
+    

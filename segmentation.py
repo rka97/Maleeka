@@ -14,17 +14,20 @@ THRESH = 0.001
 LINE_HEIGHT = 60
 
 # Do image preprocessing.
-def preprocess(img):
+def preprocess(img, fix_skew=True):
+    # show_image([img])
     # deskew the image
     grayscale = rgb2gray(img)
-    angle = deskew.determine_skew(grayscale)
-    grayscale_rotated = rotate(grayscale, angle, resize=True, mode='constant', cval=1) * 255 
+    # show_image([img])
+    if fix_skew:
+        angle = deskew.determine_skew(grayscale)
+        grayscale = rotate(grayscale, angle, resize=True, mode='constant', cval=1)
+    grayscale = 255 * (grayscale == 0)
     # threshold = threshold_otsu(grayscale_rotated)
     # thresholded_image = 1 * (grayscale_rotated < threshold)
-    thresholded_image = 255 - grayscale_rotated
     # thresholded_image = thin(thresholded_image)
     # show_image([thresholded_image])
-    return thresholded_image
+    return grayscale
 
 def autocrop_line(line):
     vertical_projection = np.sum(line, axis=0)
