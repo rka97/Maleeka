@@ -138,9 +138,8 @@ def generate_folders():
 
 def get_PAWs(word):
 	PAWs = []
-	last_idx = 0
 	PAW = []
-	for idx, letter in enumerate(word):
+	for letter_idx, letter in enumerate(word):
 		PAW.append(letter)
 		if letter in left_disconnected_letters:
 			if len(PAW) > 1 and ''.join(PAW[-2:]) == 'لا':
@@ -153,23 +152,26 @@ def get_PAWs(word):
 		PAWs.append(PAW)
 	return PAWs
 
-def save_letter(segmented_letter, txt_letter, form, word_idx, idx):
-	img_name = str(word_idx) + "_" + str(idx) + '.png'
+def save_letter(segmented_letter, txt_letter, form, word_idx, letter_idx, img_name):
+	img_name = img_name + "_" + str(word_idx) + "_" + str(letter_idx) + '.png'
 	directory_name = GENERATED_DATASET_DIRECTORY + txt_letter + "/" + form
-	io.imsave(directory_name + "/" + img_name, segmented_letter * 255)
+	io.imsave(directory_name + "/" + img_name, np.uint8(segmented_letter * 255))
 	# print("saved" , txt_letter,  "to" , directory_name, img_name)
 	# show_images([segmented_letter])
-
 
 
 def generate_dataset(words_characters, filename):
 	txt_file = open(filename, encoding='utf-8')
 	txt_words = txt_file.read().split(' ')
+	if (len(words_characters) != len(txt_words)):
+		return
+	img_name = filename.split('/')[-1].split('.')[0]
 	generate_folders()
 	for word_idx, (segmented_word, txt_word) in enumerate(zip(words_characters, txt_words)):
 		PAWs = get_PAWs(txt_word)
 		print(PAWs)
 		txt_word_length = sum([len(PAW) for PAW in PAWs])
+		print(word_idx)
 		if len(segmented_word) != txt_word_length:
 			print("length doesn't match")
 			continue
@@ -178,20 +180,21 @@ def generate_dataset(words_characters, filename):
 		for PAW in PAWs:
 			if len(PAW) == 1:
 				# isolated letter
-				save_letter(segmented_word[idx], PAW[0], "Isolated", word_idx, idx)
+				save_letter(segmented_word[idx], PAW[0], "Isolated", word_idx, idx, img_name)
 				idx += 1
 			else :
 				for paw_letter_idx, paw_letter in enumerate(PAW):
 					if paw_letter_idx == 0:
 						# Initial letter
-						save_letter(segmented_word[idx], paw_letter, "Initial", word_idx, idx)
+						save_letter(segmented_word[idx], paw_letter, "Initial", word_idx, idx, img_name)
 					elif paw_letter_idx == len(PAW) - 1:
 						# Final letter
-						save_letter(segmented_word[idx], paw_letter, "Final", word_idx, idx)
+						save_letter(segmented_word[idx], paw_letter, "Final", word_idx, idx, img_name)
 					else:
 						# Medial letter
-						save_letter(segmented_word[idx], paw_letter, "Medial", word_idx, idx)
+						save_letter(segmented_word[idx], paw_letter, "Medial", word_idx, idx, img_name)
 					idx += 1
+
 def test():
 	words_string = "ابراهيم محمود احمد عصام سار ماهر احمد خاالد"
 	words_characters = []

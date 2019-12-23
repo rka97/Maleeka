@@ -20,6 +20,8 @@ from common import *
 from preprocess import *
 from segment_char import *
 from generate_dataset import *
+from os import listdir
+from os.path import isfile, join
 
 
 DATASET_DIRECTORY = 'dataset/'
@@ -27,23 +29,24 @@ DATASET_DIRECTORY = 'dataset/'
 def main():
 	
 	# TODO insert loop over all img_names here
-	img_name = 'capr6.png'
-	
-	img_pos = DATASET_DIRECTORY + 'scanned/' + img_name
-	file_pos = DATASET_DIRECTORY + 'text/' + img_name.split('.')[0] + '.txt'
-	image = io.imread(img_pos)
-	image = preprocess(image)
-	io.imsave('output.png', image * 255)
-	image_lines = segment_lines(image)
-	image_words = segment_words(image_lines)
-	words_characters = segment_characters_habd(image_words)
+	images = [f for f in listdir(DATASET_DIRECTORY + 'scanned/') if isfile(join(DATASET_DIRECTORY + 'scanned/', f))]
+	for img_name in images:		
+		print("filename", img_name)
+		img_pos = DATASET_DIRECTORY + 'scanned/' + img_name
+		file_pos = DATASET_DIRECTORY + 'text/' + img_name.split('.')[0] + '.txt'
+		image = io.imread(img_pos)
+		image = preprocess(image)
+		io.imsave('output.png', image * 255)
+		image_lines = segment_lines(image)
+		image_words = segment_words(image_lines)
+		words_characters = segment_characters_habd(image_words)
 
-	# i = 0
-	# for i in range(len(words_characters)):
-	# 	debug_draw(image_words[i])
-	# 	for char in words_characters[i]:
-	# 		debug_draw(char)
-	generate_dataset(words_characters, file_pos)
+		# i = 0
+		# for i in range(len(words_characters)):
+		# 	debug_draw(image_words[i])
+		# 	for char in words_characters[i]:
+		# 		debug_draw(char)
+		generate_dataset(words_characters, file_pos)
 
 
 # TODO: Deprecate this.
