@@ -139,20 +139,26 @@ def generate_folders():
 def get_PAWs(word):
 	PAWs = []
 	last_idx = 0
+	PAW = []
 	for idx, letter in enumerate(word):
+		PAW.append(letter)
 		if letter in left_disconnected_letters:
-			PAWs.append(word[last_idx:idx+1])
-			last_idx = idx + 1
-	if last_idx < len(word):
-		PAWs.append(word[last_idx:])
+			if len(PAW) > 1 and ''.join(PAW[-2:]) == 'لا':
+				# remove last two letters (ل,ا) and add a new one (لا)
+				del PAW[-2:]
+				PAW.append('لا')
+			PAWs.append(PAW)
+			PAW = []
+	if (len(PAW)):
+		PAWs.append(PAW)
 	return PAWs
 
 def save_letter(segmented_letter, txt_letter, form, word_idx, idx):
 	img_name = str(word_idx) + "_" + str(idx) + '.png'
 	directory_name = GENERATED_DATASET_DIRECTORY + txt_letter + "/" + form
 	io.imsave(directory_name + "/" + img_name, segmented_letter * 255)
-	print("saved" , "to" , directory_name, img_name)
-	show_images([segmented_letter])
+	# print("saved" , txt_letter,  "to" , directory_name, img_name)
+	# show_images([segmented_letter])
 
 
 
@@ -161,9 +167,12 @@ def generate_dataset(words_characters, filename):
 	txt_words = txt_file.read().split(' ')
 	generate_folders()
 	for word_idx, (segmented_word, txt_word) in enumerate(zip(words_characters, txt_words)):
-		if len(segmented_word) != len(txt_word):
-			continue
 		PAWs = get_PAWs(txt_word)
+		print(PAWs)
+		txt_word_length = sum([len(PAW) for PAW in PAWs])
+		if len(segmented_word) != txt_word_length:
+			print("length doesn't match")
+			continue
 		idx = 0
 		print("PAWs", PAWs)
 		for PAW in PAWs:
@@ -192,3 +201,7 @@ def test():
 	generate_dataset(words_characters, "ss")
 
 # test()
+# words_characters = [
+# 	["ا","لا","س","لا","م"]
+# ]
+# generate_dataset(words_characters, 'ff')
