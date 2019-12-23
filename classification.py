@@ -85,7 +85,8 @@ def load_data():
 				features = extract_features(image)
 				data = np.append(data, features, axis=0)
 				labels = np.append(labels, letter + "_" + form)
-		break
+		# uncomment next line in case of testing to lower data size
+		# break
 	return data, labels
 
 
