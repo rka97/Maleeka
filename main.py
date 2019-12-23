@@ -17,13 +17,19 @@ from preprocess import *
 from segment_char import *
 
 def main():
-    img_pos = "images/scanned/capr6.png"
+    img_pos = "images/scanned/capr4.png"
     image = io.imread(img_pos)
     image = preprocess(image)
     io.imsave('output.png', image * 255)
     image_lines = segment_lines(image)
     image_words = segment_words(image_lines)
-    image_characters = segment_characters_habd(image_words)
+    words_characters = segment_characters_habd(image_words)
+
+    i = 0
+    for i in range(len(words_characters)):
+        debug_draw(image_words[i])
+        for char in words_characters[i]:
+            debug_draw(char)
     # TODO: classify characters.
 
 

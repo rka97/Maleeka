@@ -48,9 +48,16 @@ def detect_mid_chars(raw, word):
     split_segments = get_segments_from_indices(word_skeleton, split_indices)
     split_indices = fix_segments(split_segments, split_indices)
     split_segments = get_segments_from_indices(raw, split_indices)
-    for segment in split_segments:
-        debug_draw(segment)
+    # for segment in split_segments:
+    #     debug_draw(segment)
     return split_segments
+
+
+def get_split_index(seg_cntr, max_seg):
+    if seg_cntr == max_seg-1:
+        return max_seg-2
+    else:
+        return seg_cntr
 
 # TODO: FIX ALL THE SPLITS.
     # RULES:
@@ -60,24 +67,27 @@ def fix_segments(segments, split_indices):
     seg_cntr = 0
     n_deleted = 0
     n_seg = len(segments)
+    mask = np.ones_like(split_indices, dtype=bool)
     while seg_cntr < n_seg:
         curr_segment = image_autocrop(segments[seg_cntr])
         # debug_draw(curr_segment)
+        curr_sx, curr_sy = curr_segment.shape
+        print("Current info: ", curr_sx, curr_sy)
+
+        if curr_sx <= 2 or curr_sy <= 2:
+            mask[get_split_index(seg_cntr, n_seg)] = False
+            seg_cntr += 2
+            continue
         if seg_cntr < (n_seg - 1):
             next_segment = image_autocrop(segments[seg_cntr + 1])
-            curr_sx, curr_sy = curr_segment.shape
             next_sx, next_sy = next_segment.shape
-            print(curr_sx, curr_sy)
-            print(next_sx, next_sy)
+            print("Next info: ", next_sx, next_sy)
             if has_hole(curr_segment) and not has_hole(next_segment):
                 # Candidate to be a SAD/DAD
                 if (curr_sy > 2 * next_sy and curr_sx > next_sx and next_sx < next_sy - 1):
-                    split_indices = np.delete(split_indices, seg_cntr - n_deleted)
+                    mask[get_split_index(seg_cntr, n_seg)] = False
                     seg_cntr += 2
-                    n_deleted += 1
                     print("Over-segmented SAD detected.")
-                    print("Current info: ", curr_sx, curr_sy)
-                    print("Next info: ", next_sx, next_sy)
                     continue
                     # debug_draw(curr_segment)
                     # debug_draw(next_segment)
@@ -88,37 +98,31 @@ def fix_segments(segments, split_indices):
                 print("baseline: ", baseline)
                 if (baseline >= 18):
                     print("Over-segmented NUN detected.")
-                    split_indices = np.delete(split_indices, seg_cntr - n_deleted)
-                    n_deleted += 1
+                    mask[get_split_index(seg_cntr, n_seg)] = False
                     seg_cntr += 2
                     continue
             if seg_cntr < (n_seg - 2):
                 next2_segment = image_autocrop(segments[seg_cntr + 2])
                 next2_sx, next2_sy = next2_segment.shape
-                print(next2_sx, next2_sy)
-                if ( np.abs(curr_sx - next_sx) <= 2 and np.abs(curr_sy - next_sy) <= 2 and np.abs(next_sx - next2_sx) <= 2 and np.abs(next_sy - next2_sy) <= 2 ):
-                    # Candidate to be a SEEN/SHEEN
-                    hp1 = np.sum(segments[seg_cntr], axis=1)
-                    bl1 = np.argmax(hp1)
-                    hp2 = np.sum(segments[seg_cntr+1], axis=1)
-                    bl2 = np.argmax(hp2)
-                    hp3 = np.sum(segments[seg_cntr+2], axis=1)
-                    bl3 = np.argmax(hp3)
-                    print(np.mean(hp1), bl1, np.mean(hp2), bl2, np.mean(hp3), bl3)
-                    if (bl1 == bl2 and bl2 == bl3 and np.mean(hp1) <= 0.6 and np.mean(hp2) <= 0.6 and np.mean(hp3) <= 0.6):
-                        print("Over-segmented SEEN detected.")
-                        split_indices = np.delete(split_indices, seg_cntr - n_deleted) 
-                        n_deleted += 1
-                        seg_cntr += 1
-                        split_indices = np.delete(split_indices, seg_cntr - n_deleted) 
-                        n_deleted += 1
-                        seg_cntr += 2
-                        continue
+                print("next2 info: ", next2_sx, next2_sy)
+                # Candidate to be a SEEN/SHEEN
+                hp1 = np.sum(segments[seg_cntr], axis=1)
+                bl1 = np.argmax(hp1)
+                hp2 = np.sum(segments[seg_cntr+1], axis=1)
+                bl2 = np.argmax(hp2)
+                hp3 = np.sum(segments[seg_cntr+2], axis=1)
+                bl3 = np.argmax(hp3)
+                print(np.mean(hp1), bl1, np.mean(hp2), bl2, np.mean(hp3), bl3)
+                if (bl1 == bl2 and bl2 == bl3 and np.mean(hp1) <= 0.6 and np.mean(hp2) <= 0.6 and np.mean(hp3) <= 0.6):
+                    print("Over-segmented SEEN detected.")
+                    mask[get_split_index(seg_cntr, n_seg)] = False
+                    mask[get_split_index(seg_cntr+1, n_seg)] = False
+                    seg_cntr += 3
+                    continue
         print("\n")
         seg_cntr += 1
-
     print("fix_segments: END.")
-    return split_indices
+    return split_indices[mask]
 
 
 def get_segments_from_indices(word, split_indices):
@@ -157,7 +161,6 @@ def highlight(img_like, places, axis=0):
     return img
 
 def _segment_subword(raw, filled):
-
     # Isolated characters
     raw_cropped = image_autocrop(raw)
     sx, sy = raw_cropped.shape
@@ -165,23 +168,17 @@ def _segment_subword(raw, filled):
     if sy <= 13:
         print("Too small => Isolated..")
         # debug_draw(raw_cropped, raw_cropped)
-        return [ raw, filled ]
+        return [ raw ]
+    # Middle/End Characters
+    split_segments = detect_mid_chars(raw, filled)
+    return split_segments
 
-    # 1. find the baseline in the filled image
-    horizontal_projection = np.sum(filled, axis=1)
-    baseline = np.argwhere(horizontal_projection == np.max(horizontal_projection))
-    baseline_highlight = highlight(filled, baseline, 0)
-    # debug_draw(raw, baseline_highlight)
-
-    detect_mid_chars(raw, filled)
-
-
-
+def sorting_key(subword):
+    return subword[0]
 
 def segment_characters_habd(words):
     words_characters = []
     for word in words:
-        show_images([word])
         subwords = []
         filled_word = fill_dots(word)
         _, contours, heirarchy = cv.findContours(filled_word.astype('uint8')*255, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
@@ -207,32 +204,17 @@ def segment_characters_habd(words):
                 # debug_draw(word, None, red_word)
             else:
                 # debug_draw(word, box_mask, red_word)
-                subwords.append([ word[:, min_width:max_width+1], filled_word[:, min_width:max_width+1] ])
+                # print(max_width)
+                subwords.append([ max_width, word[:, min_width:max_width+1], filled_word[:, min_width:max_width+1] ])
             print("\n")
             cnt += 1
         
-        for [subword_pure, subword_filled] in subwords:
-            characters = _segment_subword(subword_pure, subword_filled)
+        subwords.sort(key=sorting_key, reverse=True)
+        word_characters = []
 
-        # thinned_word = thin(word)
-        # baseline = np.argmax( np.sum(word, axis=1) ) + 3
-        # baseline_top = baseline - 4
-        # new_word = np.zeros_like(thinned_word)
-        # new_word[baseline_top:baseline+1, :] = 1
-        # debug_draw(word, blue=new_word)
-        # detect_mid_chars(thinned_word)
-        # debug_draw(thinned_word)
+        for [_, subword_pure, subword_filled] in subwords:
+            subword_characters = _segment_subword(subword_pure, subword_filled)
+            word_characters += subword_characters
 
-        # segp_word = np.zeros_like(thinned_word)
-        # for w in range(width):
-        #     val_above_baseline = np.sum(thinned_word[:baseline-2, w])
-        #     val_baseline = np.average( [word[baseline, w], word[baseline-1, w], word[baseline+1,w]])
-        #     val_below_baseline = np.sum(thinned_word[baseline+2:, w])
-        #     print(val_above_baseline, val_baseline, val_below_baseline)
-        #     if val_baseline > 0 and (val_above_baseline == 0 and val_below_baseline == 0):
-        #         segp_word[baseline, w] = 1
-        #         print("Here!")
-        # debug_draw(thinned_word, segp_word)
-
-        # show_images([word_skeleton])
-    return word_characters
+        words_characters.append(word_characters)
+    return words_characters
