@@ -2,3 +2,5 @@ numpy
 matplotlib
 scikit-image
 deskew
+imutils
+cv2
