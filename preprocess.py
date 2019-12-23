@@ -14,8 +14,12 @@ from common import *
 # Do image preprocessing.
 def preprocess(img):
     # deskew the image
+    img = image_autocrop(img)
     grayscale = rgb2gray(img)
-    angle = deskew.determine_skew(grayscale)
+    angle = deskew.determine_skew(grayscale, sigma=2.0)
+    # print(angle)
+    if angle < -60:
+        angle = 0
     grayscale_rotated = rotate(grayscale, angle, resize=True, mode='constant', cval=1) * 255 
     # threshold = threshold_otsu(grayscale_rotated)
     # thresholded_image = 1 * (grayscale_rotated < threshold)
@@ -52,9 +56,9 @@ def segment_lines(img):
 def segment_words(lines):
     words = []
     for line in lines:
-        vertical_projection = np.sum(line, axis=0)
-        vertical_projection = gaussian(vertical_projection, sigma=1.5)
-        threshold = np.max(vertical_projection) * 0.1
+        vertical_projection = np.sum( gaussian(line, sigma=1.6175), axis=0)
+        # vertical_projection = gaussian(vertical_projection, sigma=3)
+        threshold = np.max(vertical_projection) * 0.0495
         vertical_projection = 1 * (vertical_projection > threshold)
         word_start = 0
         reading_word = 0
