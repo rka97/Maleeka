@@ -12,22 +12,6 @@ def has_hole(word):
     is_hole = is_hole[0]
     return np.max(is_hole) > 0
 
-
-# TODO: FIX ALL THE SPLITS.
-    # RULES:
-    # 1. SAD/DAD:
-    #    If I have a hole, the next has low width, and am much higher than the next.
-def fix_segments(segments, split_indices):
-    seg_cntr = 0
-    n_seg = len(segments)
-    for seg_cntr in range(n_seg):
-        curr_segment = segments[seg_cntr]
-        if seg_cntr < (n_seg - 1):
-            next_segment = segments[seg_cntr + 1]
-            if has_hole(curr_segment):
-                debug_draw(curr_segment)
-
-
 def detect_mid_chars(raw, word):
     BASELINE_THICKNESS = 2
     word_skeleton = skeletonize(word)
@@ -61,14 +45,93 @@ def detect_mid_chars(raw, word):
     # debug_draw(word_skeleton, vproj_highlight, hproj_highlight)
 
     split_indices = np.flip(np.where(possible_splits == 1))[0]
+    split_segments = get_segments_from_indices(word_skeleton, split_indices)
+    split_indices = fix_segments(split_segments, split_indices)
+    split_segments = get_segments_from_indices(raw, split_indices)
+    for segment in split_segments:
+        debug_draw(segment)
+    return split_segments
+
+# TODO: FIX ALL THE SPLITS.
+    # RULES:
+    # 1. SAD/DAD:
+    #    If I have a hole, the next has low width, and am much higher than the next.
+def fix_segments(segments, split_indices):
+    seg_cntr = 0
+    n_deleted = 0
+    n_seg = len(segments)
+    while seg_cntr < n_seg:
+        curr_segment = image_autocrop(segments[seg_cntr])
+        # debug_draw(curr_segment)
+        if seg_cntr < (n_seg - 1):
+            next_segment = image_autocrop(segments[seg_cntr + 1])
+            curr_sx, curr_sy = curr_segment.shape
+            next_sx, next_sy = next_segment.shape
+            print(curr_sx, curr_sy)
+            print(next_sx, next_sy)
+            if has_hole(curr_segment) and not has_hole(next_segment):
+                # Candidate to be a SAD/DAD
+                if (curr_sy > 2 * next_sy and curr_sx > next_sx and next_sx < next_sy - 1):
+                    split_indices = np.delete(split_indices, seg_cntr - n_deleted)
+                    seg_cntr += 2
+                    n_deleted += 1
+                    print("Over-segmented SAD detected.")
+                    print("Current info: ", curr_sx, curr_sy)
+                    print("Next info: ", next_sx, next_sy)
+                    continue
+                    # debug_draw(curr_segment)
+                    # debug_draw(next_segment)
+            if next_sx > 2 * next_sy and curr_sx >= curr_sy and not(curr_sx >= 2 * curr_sy):
+                # Candidate to be an over-segmented noon.
+                horizontal_projection = np.sum(segments[seg_cntr], axis=1)
+                baseline = np.argmax( horizontal_projection )
+                print("baseline: ", baseline)
+                if (baseline >= 18):
+                    print("Over-segmented NUN detected.")
+                    split_indices = np.delete(split_indices, seg_cntr - n_deleted)
+                    n_deleted += 1
+                    seg_cntr += 2
+                    continue
+            if seg_cntr < (n_seg - 2):
+                next2_segment = image_autocrop(segments[seg_cntr + 2])
+                next2_sx, next2_sy = next2_segment.shape
+                print(next2_sx, next2_sy)
+                if ( np.abs(curr_sx - next_sx) <= 2 and np.abs(curr_sy - next_sy) <= 2 and np.abs(next_sx - next2_sx) <= 2 and np.abs(next_sy - next2_sy) <= 2 ):
+                    # Candidate to be a SEEN/SHEEN
+                    hp1 = np.sum(segments[seg_cntr], axis=1)
+                    bl1 = np.argmax(hp1)
+                    hp2 = np.sum(segments[seg_cntr+1], axis=1)
+                    bl2 = np.argmax(hp2)
+                    hp3 = np.sum(segments[seg_cntr+2], axis=1)
+                    bl3 = np.argmax(hp3)
+                    print(np.mean(hp1), bl1, np.mean(hp2), bl2, np.mean(hp3), bl3)
+                    if (bl1 == bl2 and bl2 == bl3 and np.mean(hp1) <= 0.6 and np.mean(hp2) <= 0.6 and np.mean(hp3) <= 0.6):
+                        print("Over-segmented SEEN detected.")
+                        split_indices = np.delete(split_indices, seg_cntr - n_deleted) 
+                        n_deleted += 1
+                        seg_cntr += 1
+                        split_indices = np.delete(split_indices, seg_cntr - n_deleted) 
+                        n_deleted += 1
+                        seg_cntr += 2
+                        continue
+        print("\n")
+        seg_cntr += 1
+
+    print("fix_segments: END.")
+    return split_indices
+
+
+def get_segments_from_indices(word, split_indices):
+    height, width = word.shape
     split_segments = []
     start = width-1
     for split_index in split_indices:
-        segment = word_skeleton[:, split_index:start+1]
+        segment = word[:, split_index:start+1]
         start = split_index
         split_segments.append(segment)
-    split_segments.append(word_skeleton[:, :start+1])
-    fix_segments(split_segments, split_indices)
+    split_segments.append(word[:, :start+1])
+    return split_segments
+
 
 def fill_dots(word_with_dots):
     word = word_with_dots.copy()
@@ -100,8 +163,8 @@ def _segment_subword(raw, filled):
     sx, sy = raw_cropped.shape
     # print(sx, sy)
     if sy <= 13:
-        print("Probably isolated..")
-        debug_draw(raw_cropped, raw_cropped)
+        print("Too small => Isolated..")
+        # debug_draw(raw_cropped, raw_cropped)
         return [ raw, filled ]
 
     # 1. find the baseline in the filled image
