@@ -18,77 +18,40 @@ from skimage.feature import canny
 import cv2 as cv
 from common import *
 from preprocess import *
-from segment_char import *
+# from segment_char import *
 from generate_dataset import *
+from word_based import *
+from os import path
 
+DATASET_DIRECTORY = 'images/'
 
-DATASET_DIRECTORY = 'dataset/'
+def get_raw_dataset_files(months, num, start=1):
+    image_files = []
+    text_files = []
+    for month in months:
+        for i in range(num):
+            img_name = month + str(i+start) + '.png'
+            image_files.append( DATASET_DIRECTORY + 'scanned/' + img_name  )
+            text_files.append(  DATASET_DIRECTORY + 'text/' + img_name.split('.')[0] + '.txt'  )
+    return image_files, text_files
+
 
 def main():
-	
-	# TODO insert loop over all img_names here
-	img_name = 'capr6.png'
-	
-	img_pos = DATASET_DIRECTORY + 'scanned/' + img_name
-	file_pos = DATASET_DIRECTORY + 'text/' + img_name.split('.')[0] + '.txt'
-	image = io.imread(img_pos)
-	image = preprocess(image)
-	io.imsave('output.png', image * 255)
-	image_lines = segment_lines(image)
-	image_words = segment_words(image_lines)
-	words_characters = segment_characters_habd(image_words)
+    train_months = ['csep', 'capr', 'cjan', 'cjun']
+    image_files, text_files = get_raw_dataset_files(train_months, 400)
+    if not (path.exists(LEXICON_PATH) and path.exists(KMEANS_PATH) and path.exists(FEATURES_MAT_PATH)):
+        lexicon, kmeans, features_mat_arr, cluster_idx = wb_generate_dataset(image_files, text_files)
 
-	# i = 0
-	# for i in range(len(words_characters)):
-	# 	debug_draw(image_words[i])
-	# 	for char in words_characters[i]:
-	# 		debug_draw(char)
-	generate_dataset(words_characters, file_pos)
-
-
-# TODO: Deprecate this.
-# Implementation of the character segmentation algorithm from Latifa et al. (2004)
-# The results were not very good.
-def segment_characters_latifa(words):
-	for word in words:
-		# Find the horizontal junction line.
-		horizontal_projection = np.sum(word, axis=1)
-		junction_idx = np.argmax(horizontal_projection)
-		# Find the top & bottom lines for each column.
-		length, width = word.shape
-		top_lines = np.argmax(word, axis=0)
-		bottom_lines = length - 1 - np.argmax( np.flip(word, axis=0), axis=0)
-		# Find the threshold.
-		vertical_projection = np.sum(word, axis=0)
-		threshold = mode(vertical_projection)[0][0]
-		# Find the number of transitions in every column.
-		num_transitions = np.sum(np.abs(word[0:length-2, :] - word[1:length-1, :]), axis=0)
-		
-		character_start = 0
-		reading_characer = 0
-		j = width - 1
-		show_images([word])
-		while j >= 0:
-			column_vproj = vertical_projection[j]
-			# print(column_vproj, threshold)
-			if reading_characer == 0 and column_vproj > threshold:
-				character_start = j
-				reading_characer = 1
-				print("Started a character!")
-			elif reading_characer == 1:
-				if (top_lines[j] <= junction_idx) and \
-					(bottom_lines[j] >= junction_idx) and \
-					(column_vproj <= threshold) and \
-					(num_transitions[j] == 2) and \
-					(bottom_lines[j] - top_lines[j] <= threshold) and \
-					(top_lines[j] >= top_lines[character_start]):
-						show_images([word[:, j:character_start+2]])
-						reading_characer = 0
-						print("ended a chracter!")
-				elif j == 0:
-					show_images([word[:, j:character_start+2]])
-			j -= 1
-
-
+    print("Loading dataset..")
+    lexicon = load_must_exist(LEXICON_PATH)
+    kmeans = load_must_exist(KMEANS_PATH)
+    features_mat_arr = np.array(load_must_exist(FEATURES_MAT_PATH))
+    labels = kmeans.predict(features_mat_arr)
+    cluster_idx = {i: np.where(labels == i)[0] for i in range(kmeans.n_clusters)}
+    print("Dataset loaded!")
+    
+    test_months = ['cjan', 'cfeb', 'cmar', 'capr', 'cmay', 'cjun', 'cjul', 'caug', 'csep', 'coct', 'cnov', 'cdec']
+    test_image_files, test_text_files = get_raw_dataset_files(test_months, 5, start=705)
+    wb_run_test(test_image_files, test_text_files, lexicon, kmeans, features_mat_arr, cluster_idx)
 
 main()

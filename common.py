@@ -2,10 +2,29 @@ import numpy as np
 import matplotlib.pyplot as plt
 from skimage.transform import rotate, resize, rescale
 import deskew
+import pickle
 
 LINE_HEIGHT = 40
 BASELINE_THICKNESS = 2
 BASELINE_SCAFFOLD = 5
+
+def load_must_exist(file_path):
+    with open(file_path, "rb") as file_handle:
+        var = pickle.load(file_handle)
+        return var
+
+def load_if_exists(file_path, default):
+    try:
+        with open(file_path, "rb") as file_handle:
+            var = pickle.load(file_handle)
+            return var
+    except:
+        print("%s does not exist. Returning default.." % file_path)
+        return default
+
+def write_to_file(file_path, obj):
+    with open(file_path, "wb") as file_handle:
+        pickle.dump(obj, file_handle)
 
 
 def highlight(img_like, places, axis=0):

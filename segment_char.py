@@ -42,7 +42,7 @@ def detect_mid_chars(raw, word):
 
     vproj_highlight2 = np.zeros_like(vproj_highlight)
     vproj_highlight2[:, split_indices] = 1
-    # debug_draw(skeletonize(raw), vproj_highlight, vproj_highlight2)
+    debug_draw(skeletonize(raw), vproj_highlight, vproj_highlight2)
 
     # for segment in split_segments:
     #     debug_draw(segment)
@@ -81,7 +81,7 @@ def _segment_subword(raw, filled):
     sx, sy = raw_cropped.shape
     # print(sx, sy)
     if sy <= 13:
-        print("Too small => Isolated..")
+        # print("Too small => Isolated..")
         # debug_draw(raw_cropped, raw_cropped)
         return [ raw ]
     # Middle/End Characters
@@ -130,3 +130,47 @@ def segment_characters_habd(words):
 
         words_characters.append(word_characters)
     return words_characters
+
+
+
+# Implementation of the character segmentation algorithm from Latifa et al. (2004)
+# The results were not very good.
+def segment_characters_latifa(words):
+    for word in words:
+        # Find the horizontal junction line.
+        horizontal_projection = np.sum(word, axis=1)
+        junction_idx = np.argmax(horizontal_projection)
+        # Find the top & bottom lines for each column.
+        length, width = word.shape
+        top_lines = np.argmax(word, axis=0)
+        bottom_lines = length - 1 - np.argmax( np.flip(word, axis=0), axis=0)
+        # Find the threshold.
+        vertical_projection = np.sum(word, axis=0)
+        threshold = mode(vertical_projection)[0][0]
+        # Find the number of transitions in every column.
+        num_transitions = np.sum(np.abs(word[0:length-2, :] - word[1:length-1, :]), axis=0)
+        
+        character_start = 0
+        reading_characer = 0
+        j = width - 1
+        show_images([word])
+        while j >= 0:
+            column_vproj = vertical_projection[j]
+            # print(column_vproj, threshold)
+            if reading_characer == 0 and column_vproj > threshold:
+                character_start = j
+                reading_characer = 1
+                print("Started a character!")
+            elif reading_characer == 1:
+                if (top_lines[j] <= junction_idx) and \
+                    (bottom_lines[j] >= junction_idx) and \
+                    (column_vproj <= threshold) and \
+                    (num_transitions[j] == 2) and \
+                    (bottom_lines[j] - top_lines[j] <= threshold) and \
+                    (top_lines[j] >= top_lines[character_start]):
+                        show_images([word[:, j:character_start+2]])
+                        reading_characer = 0
+                        print("ended a chracter!")
+                elif j == 0:
+                    show_images([word[:, j:character_start+2]])
+            j -= 1

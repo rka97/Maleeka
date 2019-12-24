@@ -46,7 +46,8 @@ def segment_lines(img):
             resized_line = resize(line, (LINE_HEIGHT, int(line.shape[1] * (LINE_HEIGHT / line.shape[0]))), preserve_range=True, order=3, anti_aliasing=False)
             # io.imsave('images/lines/line' + str(len(lines)) +'.png', resized_line * 255)
             # resized_line = (resized_line > 1.5 * np.mean(resized_line)) * 1
-            lines.append( resized_line )
+            if line.shape[0] > 5 and line.shape[1] > 5:
+                lines.append( resized_line )
             # show_images([resized_line])
             reading_line = 0
     return lines
@@ -57,7 +58,6 @@ def segment_words(lines):
     words = []
     for line in lines:
         vertical_projection = np.sum( gaussian(line, sigma=1.6175), axis=0)
-        # vertical_projection = gaussian(vertical_projection, sigma=3)
         threshold = np.max(vertical_projection) * 0.0495
         vertical_projection = 1 * (vertical_projection > threshold)
         word_start = 0
@@ -70,12 +70,7 @@ def segment_words(lines):
                 reading_word = 1
             elif reading_word == 1 and line_value <= 0:
                 word = line[:, i+1:word_start+1]
-                # show_images([word])
                 reading_word = 0
-                deskew_image(word)
-                # TODO: fix the threshold.
-                # threshold = threshold_otsu(word)
-                # print(threshold)
                 threshold = 110
                 word = (word > threshold) * 1
                 word = image_autocrop(word)
